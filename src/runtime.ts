@@ -1,13 +1,17 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { AppServerClient, type ServerRequestResponder } from "./app-server-client.ts";
 import { ComputerUseBackend, type ComputerUseToolResult } from "./computer-use-backend.ts";
+import { getComputerUseAppServerArgs } from "./codex-installation.ts";
 import { setComputerUseStatus } from "./footer-status.ts";
 import { logDebug } from "./log.ts";
 import type { AppServerRequest, InitializeResponse } from "./protocol.ts";
 import { CodexThreadManager } from "./thread-manager.ts";
 
 export class ComputerUseRuntime {
-	readonly client = new AppServerClient({ requestTimeoutMs: 120_000 });
+	readonly client = new AppServerClient({
+		requestTimeoutMs: 120_000,
+		codexArgs: getComputerUseAppServerArgs(),
+	});
 	readonly threads = new CodexThreadManager(this.client);
 	readonly backend = new ComputerUseBackend(this.client, this.threads);
 

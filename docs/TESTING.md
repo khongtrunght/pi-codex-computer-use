@@ -18,8 +18,9 @@ Stable failure reasons referenced below (`codex_missing`, `plugin_not_installed`
 
 ## 2. Codex app bundle / marketplace
 
-- `/Applications/Codex.app` missing — expect a clear install/source hint.
-- Bundled marketplace path missing (`/Applications/Codex.app/Contents/Resources/plugins/openai-bundled`).
+- `/Applications/ChatGPT.app` and legacy `/Applications/Codex.app` both missing — expect a clear install/source hint.
+- Bundled marketplace path missing from ChatGPT.app (or legacy Codex.app).
+- User config contains a disabled, relative `mcp_servers.computer-use` entry that shadows the installed plugin — expect the process-local installed-cache override to expose tools without rewriting user config.
 - Marketplace exists but has no `computer-use` entry.
 - `plugin/list` returns only a remote marketplace entry.
 - Multiple marketplaces contain `computer-use` / ambiguous match.

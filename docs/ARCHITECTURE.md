@@ -60,7 +60,9 @@ Messages are newline-delimited JSON objects (`{id, method, params}`) — no `Con
 
 Other methods used: `marketplace/add`, `plugin/install`, `config/mcpServer/reload`, `mcpServerStatus/list`. Method names are centralized in `src/protocol.ts` to limit version-drift surface.
 
-The bundled plugin lives at `/Applications/Codex.app/Contents/Resources/plugins/openai-bundled/plugins/computer-use`; its `.mcp.json` launches `SkyComputerUseClient mcp`.
+The bundled plugin currently lives under `/Applications/ChatGPT.app/Contents/Resources/plugins/openai-bundled/plugins/computer-use` (legacy releases used Codex.app). Installed plugins are cached under `$CODEX_HOME/plugins/cache`. Its `.mcp.json` launches `SkyComputerUseClient mcp`.
+
+Some ChatGPT.app releases also write a disabled `mcp_servers.computer-use` entry with a relative command into `config.toml`. That user-level entry shadows the enabled plugin when Pi launches app-server from another working directory. The extension discovers the installed plugin cache and passes process-local Codex config overrides for the launcher path, working directory, and enabled state. It never rewrites the user's config.
 
 ## Thread management
 

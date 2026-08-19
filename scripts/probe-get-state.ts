@@ -2,10 +2,14 @@
 
 import { AppServerClient } from "../src/app-server-client.ts";
 import { ComputerUseBackend } from "../src/computer-use-backend.ts";
+import { getComputerUseAppServerArgs } from "../src/codex-installation.ts";
 import { CodexThreadManager } from "../src/thread-manager.ts";
 
 const app = process.argv[2] ?? "Finder";
-const client = new AppServerClient({ requestTimeoutMs: 120_000 });
+const client = new AppServerClient({
+	requestTimeoutMs: 120_000,
+	codexArgs: getComputerUseAppServerArgs(),
+});
 client.onServerRequest((request, responder) => {
 	if (request.method === "mcpServer/elicitation/request") {
 		console.error(`Auto-accepting probe elicitation: ${JSON.stringify(request.params)}`);

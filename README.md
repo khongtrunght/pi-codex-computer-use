@@ -15,8 +15,8 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how the pieces fit together
 - macOS
 - [Pi](https://github.com/earendil-works/pi-coding-agent)
 - Codex CLI on `PATH` as `codex`
-- Codex.app installed, preferably at `/Applications/Codex.app`
-- Codex Computer Use plugin installed, or installable from the bundled marketplace (`/computer-use install` handles this)
+- ChatGPT.app installed at `/Applications/ChatGPT.app` (or the legacy Codex.app)
+- Codex Computer Use plugin installed, or installable from the app's bundled marketplace (`/computer-use install` handles this)
 - macOS Accessibility and Screen Recording permissions granted to Codex Computer Use when prompted
 - Preferably a vision-capable model, because `computer_use_get_app_state` returns screenshots
 
@@ -128,7 +128,7 @@ Run `/computer-use diagnose` first — it prints status plus actionable hints.
 | Symptom | Likely cause / fix |
 | --- | --- |
 | `codex_missing` | Codex CLI not on `PATH`; install Codex CLI |
-| `marketplace_missing` | Codex.app not at `/Applications/Codex.app`, or bundled marketplace path missing |
+| `marketplace_missing` | ChatGPT.app (or legacy Codex.app) is missing, or its bundled marketplace path is unavailable |
 | `plugin_not_installed` / `plugin_disabled` | Run `/computer-use install` |
 | `mcp_missing` | Plugin installed but MCP server not running; try `/computer-use reload` |
 | Tool calls hang or error with permission messages | Grant Accessibility and Screen Recording to Codex Computer Use in macOS System Settings |
@@ -144,7 +144,8 @@ PI_CUA_DEBUG=1 PI_CUA_LOG=/tmp/pi-codex-computer-use.log pi -e .
 ## Limitations
 
 - macOS only.
-- Requires the Codex app and its bundled Computer Use plugin; this extension does not implement its own desktop automation.
+- Requires ChatGPT.app (formerly Codex.app) and its bundled Computer Use plugin; this extension does not implement its own desktop automation.
+- Some ChatGPT.app versions write a disabled, relative `mcp_servers.computer-use` entry. The extension overrides that entry only for its app-server child process with the installed plugin launcher; it does not rewrite your Codex config.
 - Codex app-server and Computer Use APIs may drift between Codex versions; `/computer-use status` reports versions and tool lists to help spot drift.
 - `/computer-use disable` is session-local; new Pi sessions re-enable the tools.
 

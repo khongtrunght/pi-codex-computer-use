@@ -5,6 +5,7 @@ import type { AppServerNotification, AppServerRequest, AppServerResponse, Reques
 
 export interface AppServerClientOptions {
 	codexCommand?: string;
+	codexArgs?: string[];
 	requestTimeoutMs?: number;
 	env?: NodeJS.ProcessEnv;
 }
@@ -38,8 +39,9 @@ export class AppServerClient {
 		if (this.process) return;
 
 		const codex = this.options.codexCommand ?? "codex";
-		logDebug("app-server.spawn", { codex });
-		const child = spawn(codex, ["app-server", "--listen", "stdio://"], {
+		const codexArgs = this.options.codexArgs ?? [];
+		logDebug("app-server.spawn", { codex, argCount: codexArgs.length });
+		const child = spawn(codex, [...codexArgs, "app-server", "--listen", "stdio://"], {
 			stdio: "pipe",
 			env: { ...process.env, ...this.options.env },
 		});

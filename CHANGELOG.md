@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format is based on 
 
 ## [Unreleased]
 
+### Fixed
+
+- Detect ChatGPT.app as the current Codex host while retaining legacy Codex.app support.
+- Override disabled or broken user-level `computer-use` MCP entries for the child app-server process using the installed plugin cache, without modifying user config.
+
 ## [0.1.0] - 2026-06-09
 
 Initial release.
