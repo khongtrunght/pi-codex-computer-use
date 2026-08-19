@@ -2,9 +2,13 @@
 
 import { AppServerClient } from "../src/app-server-client.ts";
 import { ComputerUseBackend } from "../src/computer-use-backend.ts";
+import { getComputerUseAppServerArgs } from "../src/codex-installation.ts";
 import { CodexThreadManager } from "../src/thread-manager.ts";
 
-const client = new AppServerClient({ requestTimeoutMs: 120_000 });
+const client = new AppServerClient({
+	requestTimeoutMs: 120_000,
+	codexArgs: getComputerUseAppServerArgs(),
+});
 client.onServerRequest((request, responder) => {
 	responder.reject({ code: -32601, message: `Unexpected server request during list-apps probe: ${request.method}` });
 });

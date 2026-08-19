@@ -1,13 +1,17 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { AppServerClient, type ServerRequestResponder } from "./app-server-client.ts";
 import { ComputerUseBackend, type ComputerUseToolResult } from "./computer-use-backend.ts";
+import { getComputerUseAppServerArgs } from "./codex-installation.ts";
 import { setComputerUseStatus } from "./footer-status.ts";
 import { logDebug } from "./log.ts";
 import type { AppServerRequest, InitializeResponse } from "./protocol.ts";
 import { CodexThreadManager } from "./thread-manager.ts";
 
 export class ComputerUseRuntime {
-	readonly client = new AppServerClient({ requestTimeoutMs: 120_000 });
+	readonly client = new AppServerClient({
+		requestTimeoutMs: 120_000,
+		codexArgs: getComputerUseAppServerArgs(),
+	});
 	readonly threads = new CodexThreadManager(this.client);
 	readonly backend = new ComputerUseBackend(this.client, this.threads);
 
@@ -80,14 +84,14 @@ export class ComputerUseRuntime {
 
 		if (shouldDevAutoAccept(message)) {
 			logDebug("elicitation.accept.dev");
-			responder.accept({ action: "accept", content: {} });
+			responder.accept(createElicitationResponse(true, params?._meta));
 			return;
 		}
 
 		const ctx = this.latestContext;
 		if (!ctx?.hasUI) {
 			logDebug("elicitation.decline.no-ui");
-			responder.accept({ action: "decline", content: null });
+			responder.accept(createElicitationResponse(false, params?._meta));
 			return;
 		}
 
@@ -97,7 +101,7 @@ export class ComputerUseRuntime {
 			ctx.signal ? { signal: ctx.signal } : undefined,
 		);
 		logDebug(approved ? "elicitation.accept.user" : "elicitation.decline.user");
-		responder.accept({ action: approved ? "accept" : "decline", content: approved ? {} : null });
+		responder.accept(createElicitationResponse(approved, params?._meta));
 	}
 
 	private clearIdleTimer(): void {
@@ -116,6 +120,24 @@ export class ComputerUseRuntime {
 			void this.shutdown().finally(() => setComputerUseStatus(ctx, "idle"));
 		}, timeoutMs);
 	}
+}
+
+export function createElicitationResponse(approved: boolean, requestMeta: unknown): {
+	action: "accept" | "decline";
+	content: Record<string, never> | null;
+	_meta?: { persist: "always" };
+} {
+	const response = approved
+		? { action: "accept" as const, content: {} }
+		: { action: "decline" as const, content: null };
+	if (!approved || !supportsAlwaysPersistence(requestMeta)) return response;
+	return { ...response, _meta: { persist: "always" } };
+}
+
+function supportsAlwaysPersistence(meta: unknown): boolean {
+	if (!meta || typeof meta !== "object") return false;
+	const persist = (meta as { persist?: unknown }).persist;
+	return Array.isArray(persist) && persist.includes("always");
 }
 
 function shouldDevAutoAccept(message: string): boolean {

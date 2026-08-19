@@ -1,13 +1,15 @@
 import { execFile } from "node:child_process";
-import { access } from "node:fs/promises";
 import { promisify } from "node:util";
 import { AppServerClient } from "./app-server-client.ts";
+import {
+	DEFAULT_CODEX_APP_PATH,
+	findBundledMarketplaceRoot,
+	findComputerUseAppPath,
+	getComputerUseAppServerArgs,
+} from "./codex-installation.ts";
 import type { InitializeResponse, McpServerStatusListResponse, PluginListResponse, PluginMarketplaceEntry, PluginSummary } from "./protocol.ts";
 
 const execFileAsync = promisify(execFile);
-
-export const DEFAULT_CODEX_APP_PATH = "/Applications/Codex.app";
-export const DEFAULT_BUNDLED_MARKETPLACE_ROOT = `${DEFAULT_CODEX_APP_PATH}/Contents/Resources/plugins/openai-bundled`;
 export const DEFAULT_PLUGIN_NAME = "computer-use";
 export const DEFAULT_MCP_SERVER_NAME = "computer-use";
 
@@ -42,6 +44,7 @@ export interface ComputerUseStatus {
 export interface StatusEvaluationInput {
 	codexVersion?: string | undefined;
 	codexAppExists: boolean;
+	codexAppPath?: string | undefined;
 	appServer: InitializeResponse;
 	plugins: PluginListResponse;
 	mcp: McpServerStatusListResponse;
@@ -59,9 +62,13 @@ export async function checkComputerUseStatus(_cwd: string): Promise<ComputerUseS
 		};
 	}
 
-	const codexAppExists = await pathExists(DEFAULT_CODEX_APP_PATH);
+	const codexAppPath = findComputerUseAppPath();
+	const codexAppExists = codexAppPath !== undefined;
 
-	const client = new AppServerClient({ requestTimeoutMs: 60_000 });
+	const client = new AppServerClient({
+		requestTimeoutMs: 60_000,
+		codexArgs: getComputerUseAppServerArgs(),
+	});
 	try {
 		const appServer = await client.request<InitializeResponse>("initialize", {
 			clientInfo: { name: "pi-codex-computer-use", version: "0.1.0" },
@@ -70,13 +77,13 @@ export async function checkComputerUseStatus(_cwd: string): Promise<ComputerUseS
 
 		const plugins = await client.request<PluginListResponse>("plugin/list", {});
 		const mcp = await client.request<McpServerStatusListResponse>("mcpServerStatus/list", {});
-		return evaluateComputerUseStatus({ codexVersion, codexAppExists, appServer, plugins, mcp });
+		return evaluateComputerUseStatus({ codexVersion, codexAppExists, codexAppPath, appServer, plugins, mcp });
 	} catch (error) {
 		return {
 			reason: "check_failed",
 			message: "Computer Use status check failed while talking to Codex app-server.",
 			codexVersion,
-			codexAppPath: codexAppExists ? DEFAULT_CODEX_APP_PATH : undefined,
+			codexAppPath,
 			error: error instanceof Error ? error.message : String(error),
 		};
 	} finally {
@@ -86,16 +93,17 @@ export async function checkComputerUseStatus(_cwd: string): Promise<ComputerUseS
 
 export function evaluateComputerUseStatus(input: StatusEvaluationInput): ComputerUseStatus {
 	const { codexVersion, codexAppExists, appServer, plugins, mcp } = input;
+	const codexAppPath = input.codexAppPath ?? (codexAppExists ? DEFAULT_CODEX_APP_PATH : undefined);
 	const match = findPlugin(plugins, DEFAULT_PLUGIN_NAME);
 	if (!match) {
 		return {
 			reason: codexAppExists ? "marketplace_missing" : "codex_app_missing",
 			message: codexAppExists
 				? `No Codex marketplace currently lists ${DEFAULT_PLUGIN_NAME}. Try /computer-use install later.`
-				: `Codex app bundle was not found at ${DEFAULT_CODEX_APP_PATH}.`,
+				: "ChatGPT.app (or legacy Codex.app) was not found in /Applications.",
 			codexVersion,
 			appServer,
-			codexAppPath: codexAppExists ? DEFAULT_CODEX_APP_PATH : undefined,
+			codexAppPath,
 		};
 	}
 
@@ -105,7 +113,7 @@ export function evaluateComputerUseStatus(input: StatusEvaluationInput): Compute
 			message: `${DEFAULT_PLUGIN_NAME} is available in marketplace ${match.marketplace.name}, but is not installed.`,
 			codexVersion,
 			appServer,
-			codexAppPath: codexAppExists ? DEFAULT_CODEX_APP_PATH : undefined,
+			codexAppPath,
 			marketplace: { name: match.marketplace.name, path: match.marketplace.path },
 			plugin: match.plugin,
 		};
@@ -117,7 +125,7 @@ export function evaluateComputerUseStatus(input: StatusEvaluationInput): Compute
 			message: `${DEFAULT_PLUGIN_NAME} is installed but disabled.`,
 			codexVersion,
 			appServer,
-			codexAppPath: codexAppExists ? DEFAULT_CODEX_APP_PATH : undefined,
+			codexAppPath,
 			marketplace: { name: match.marketplace.name, path: match.marketplace.path },
 			plugin: match.plugin,
 		};
@@ -130,7 +138,7 @@ export function evaluateComputerUseStatus(input: StatusEvaluationInput): Compute
 			message: `${DEFAULT_MCP_SERVER_NAME} plugin is enabled, but its MCP server/tools are not available.`,
 			codexVersion,
 			appServer,
-			codexAppPath: codexAppExists ? DEFAULT_CODEX_APP_PATH : undefined,
+			codexAppPath,
 			marketplace: { name: match.marketplace.name, path: match.marketplace.path },
 			plugin: match.plugin,
 		};
@@ -141,7 +149,7 @@ export function evaluateComputerUseStatus(input: StatusEvaluationInput): Compute
 		message: "Codex Computer Use is installed, enabled, and exposing MCP tools.",
 		codexVersion,
 		appServer,
-		codexAppPath: codexAppExists ? DEFAULT_CODEX_APP_PATH : undefined,
+		codexAppPath,
 		marketplace: { name: match.marketplace.name, path: match.marketplace.path },
 		plugin: match.plugin,
 		mcpServer: { name: server.name, toolNames: Object.keys(server.tools).sort() },
@@ -149,7 +157,10 @@ export function evaluateComputerUseStatus(input: StatusEvaluationInput): Compute
 }
 
 export async function installComputerUse(): Promise<ComputerUseStatus> {
-	const client = new AppServerClient({ requestTimeoutMs: 120_000 });
+	const client = new AppServerClient({
+		requestTimeoutMs: 120_000,
+		codexArgs: getComputerUseAppServerArgs(),
+	});
 	try {
 		await client.request<InitializeResponse>("initialize", {
 			clientInfo: { name: "pi-codex-computer-use", version: "0.1.0" },
@@ -159,8 +170,9 @@ export async function installComputerUse(): Promise<ComputerUseStatus> {
 		let plugins = await client.request<PluginListResponse>("plugin/list", {});
 		let match = findPlugin(plugins, DEFAULT_PLUGIN_NAME);
 
-		if (!match && (await pathExists(DEFAULT_BUNDLED_MARKETPLACE_ROOT))) {
-			await client.request("marketplace/add", { source: DEFAULT_BUNDLED_MARKETPLACE_ROOT });
+		const bundledMarketplaceRoot = findBundledMarketplaceRoot();
+		if (!match && bundledMarketplaceRoot) {
+			await client.request("marketplace/add", { source: bundledMarketplaceRoot });
 			plugins = await client.request<PluginListResponse>("plugin/list", {});
 			match = findPlugin(plugins, DEFAULT_PLUGIN_NAME);
 		}
@@ -192,7 +204,10 @@ export async function installComputerUse(): Promise<ComputerUseStatus> {
 }
 
 export async function reloadComputerUseMcpServers(): Promise<ComputerUseStatus> {
-	const client = new AppServerClient({ requestTimeoutMs: 120_000 });
+	const client = new AppServerClient({
+		requestTimeoutMs: 120_000,
+		codexArgs: getComputerUseAppServerArgs(),
+	});
 	try {
 		await client.request<InitializeResponse>("initialize", {
 			clientInfo: { name: "pi-codex-computer-use", version: "0.1.0" },
@@ -218,7 +233,7 @@ export function formatComputerUseStatus(status: ComputerUseStatus): string {
 		status.message,
 		"",
 		`Codex CLI: ${status.codexVersion ?? "unknown"}`,
-		`Codex.app: ${status.codexAppPath ?? "not found at default path"}`,
+		`Host app: ${status.codexAppPath ?? "ChatGPT.app / Codex.app not found"}`,
 	];
 
 	if (status.appServer) {
@@ -249,15 +264,6 @@ export function formatComputerUseStatus(status: ComputerUseStatus): string {
 async function getCodexVersion(): Promise<string> {
 	const result = await execFileAsync("codex", ["--version"], { timeout: 10_000 });
 	return result.stdout.trim() || result.stderr.trim() || "codex found";
-}
-
-async function pathExists(path: string): Promise<boolean> {
-	try {
-		await access(path);
-		return true;
-	} catch {
-		return false;
-	}
 }
 
 export function findPlugin(
