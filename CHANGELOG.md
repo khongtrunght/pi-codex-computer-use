@@ -8,6 +8,7 @@ All notable changes to this project are documented here. The format is based on 
 
 - Detect ChatGPT.app as the current Codex host while retaining legacy Codex.app support.
 - Override disabled or broken user-level `computer-use` MCP entries for the child app-server process using the installed plugin cache, without modifying user config.
+- Persist an explicitly accepted app permission when Codex advertises the `always` option, preventing the same approval prompt on later app-server processes.
 
 ## [0.1.0] - 2026-06-09
 
