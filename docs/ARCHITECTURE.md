@@ -38,7 +38,18 @@ Pi has no built-in MCP support, so the extension must be the client either way. 
 
 Messages are newline-delimited JSON objects (`{id, method, params}`) — no `Content-Length` framing. The verified flow:
 
-1. Spawn: `codex app-server --listen stdio://`
+1. Spawn: `<codex> app-server --listen stdio://`
+
+   `resolveCodexCommand()` prefers the host app's bundled CLI
+   (`/Applications/ChatGPT.app/Contents/Resources/codex`) over the `codex` on `PATH`,
+   and falls back to `PATH` only when the app is absent (`PI_CUA_CODEX_COMMAND`
+   overrides both). App-server and `SkyComputerUseClient` ship inside the same host
+   app and are built against the same MCP capabilities, so they must stay in
+   lockstep. A newer `codex` on `PATH` advertises capabilities the bundled client
+   cannot decode; thread-scoped MCP startup then fails with
+   `-32603 Internal error: The data couldn't be read because it isn't in the correct
+   format`, even though `mcpServerStatus/list` still reports the server and its tools
+   as healthy. See [Verifying readiness](#verifying-readiness).
 2. Initialize:
 
    ```json
@@ -73,8 +84,12 @@ Some ChatGPT.app releases also write a disabled `mcp_servers.computer-use` entry
 App-server sends server-requests like:
 
 ```json
-{"method":"mcpServer/elicitation/request","id":0,"params":{"serverName":"computer-use","message":"Allow Codex to use Finder?"}}
+{"method":"mcpServer/elicitation/request","id":0,"params":{"serverName":"computer-use","message":"Allow ChatGPT to use Finder?"}}
 ```
+
+The prompt names the host app, not the product: ChatGPT.app-hosted builds say
+`Allow ChatGPT to use Finder?`, legacy Codex.app builds say
+`Allow Codex to use Finder?`. Parse with `ELICITATION_APP_PATTERN`, which accepts both.
 
 Flow:
 
@@ -102,3 +117,39 @@ The runtime is lazy: nothing spawns until a `/computer-use` command or `computer
 ## Version drift
 
 Codex Computer Use and app-server APIs may change between releases. Tool schemas are static definitions for the known tool surface; `/computer-use status` reports the Codex CLI version, plugin state, MCP server status, and live tool list so drift is visible. If the live tool list diverges from the static schemas, that's the signal to update `src/computer-use-tools.ts`.
+
+The host app and the Codex CLI drift independently, and that is the sharp edge:
+`SkyComputerUseClient` is installed by ChatGPT.app, while `codex` may come from a
+separate install (npm global, Homebrew, etc.). `resolveCodexCommand()` pins
+app-server to the host app's bundled CLI for this reason, but a host app upgrade can
+still ship a client that is *older* than a separately installed CLI.
+
+Observed failure (ChatGPT.app 26.903.61454 with codex 0.153.4 bundled vs
+npm `@openai/codex` 0.154.0). On `initialize`, 0.154.0 advertises an extra
+capability:
+
+```json
+{"capabilities":{"experimental":{"codex/auth-change":{}},"elicitation":{"form":{},"url":{}}}}
+```
+
+0.153.4 sends only `{"elicitation":{"form":{},"url":{}}}`. The bundled Swift client
+cannot decode `experimental`, so it answers `initialize` with
+`-32603 Internal error: The data couldn't be read because it isn't in the correct
+format`. Every `thread/start`-scoped MCP startup then fails with
+`failed to get client: MCP startup failed: handshaking with MCP server failed`.
+
+### Verifying readiness
+
+`mcpServerStatus/list` is **not** a readiness check. It starts the MCP server long
+enough to list tools, so it reports `serverInfo` and all ten tools even when the
+handshake that `thread/start` performs is broken. A status check built only on
+`mcpServerStatus/list` reports `ready` while every tool call fails.
+
+To prove Computer Use actually works, take the thread-scoped path end to end:
+`initialize` -> `thread/start` (`ephemeral: true`) -> `mcpServer/tool/call` with a
+read-only tool such as `list_apps`. `npm run probe:list-apps` does exactly that and
+is the authoritative readiness probe.
+
+Known gap: `checkComputerUseStatus()` currently uses `mcpServerStatus/list` alone,
+plus the plugin listing. It can therefore report `ready` in this failure mode. A
+correct probe needs a thread-scoped `list_apps` call (read-only, no elicitation).
