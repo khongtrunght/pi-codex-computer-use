@@ -1,5 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createInterface, type Interface as ReadlineInterface } from "node:readline";
+import { resolveCodexCommand } from "./codex-installation.ts";
 import { logDebug } from "./log.ts";
 import type { AppServerNotification, AppServerRequest, AppServerResponse, RequestId } from "./protocol.ts";
 
@@ -38,7 +39,7 @@ export class AppServerClient {
 	start(): void {
 		if (this.process) return;
 
-		const codex = this.options.codexCommand ?? "codex";
+		const codex = this.options.codexCommand ?? resolveCodexCommand();
 		const codexArgs = this.options.codexArgs ?? [];
 		logDebug("app-server.spawn", { codex, argCount: codexArgs.length });
 		const child = spawn(codex, [...codexArgs, "app-server", "--listen", "stdio://"], {

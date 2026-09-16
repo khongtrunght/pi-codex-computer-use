@@ -33,6 +33,7 @@ Stable failure reasons referenced below (`codex_missing`, `plugin_not_installed`
 - `computer-use` not installed — expect `plugin_not_installed`.
 - Installed but disabled — expect `plugin_disabled`.
 - Installed/enabled but wrong or incompatible version.
+- Installed/enabled but the Codex CLI resolved by `resolveCodexCommand()` is newer than the host app's `SkyComputerUseClient` — expect the bundled CLI to win; `PI_CUA_CODEX_COMMAND` should override it.
 - Installed/enabled but `.mcp.json` bad or missing.
 - Plugin cache path missing or corrupted, or source points to stale cache.
 
@@ -41,6 +42,7 @@ Stable failure reasons referenced below (`codex_missing`, `plugin_not_installed`
 - `mcpServerStatus/list` missing `computer-use` — expect `mcp_missing`.
 - Server exists but has zero tools, or tool names differ from expected.
 - Server startup stuck in `starting`, or startup error notification arrives.
+- `mcpServerStatus/list` lists all ten tools but `thread/start`-scoped startup fails with `-32603 ... The data couldn't be read because it isn't in the correct format` — Codex CLI / `SkyComputerUseClient` version skew. Confirm `resolveCodexCommand()` is using the host app's bundled CLI; `npm run probe:list-apps` is the readiness probe that catches this (`probe:status` does not).
 - `mcpServer/tool/call` returns `isError: true`.
 - `mcpServer/tool/call` times out.
 - Stale thread ID returns `thread not found` — expect one reset-and-retry; retry failure surfaces the error.

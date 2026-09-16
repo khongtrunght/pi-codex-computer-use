@@ -3,9 +3,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+	BUNDLED_CODEX_RELATIVE_PATH,
 	findBundledMarketplaceRoot,
 	findComputerUseAppPath,
 	getComputerUseAppServerArgs,
+	resolveCodexCommand,
 	resolveInstalledComputerUsePluginRoot,
 } from "../src/codex-installation.ts";
 
@@ -62,5 +64,38 @@ describe("Codex Computer Use installation discovery", () => {
 		const root = join(tempHome(), "ChatGPT.app", "Contents", "Resources", "plugins", "openai-bundled");
 		mkdirSync(root, { recursive: true });
 		expect(findBundledMarketplaceRoot(root)).toBe(root);
+	});
+});
+
+describe("Codex CLI resolution", () => {
+	function makeApp(root: string, name: string): { app: string; codex: string } {
+		const app = join(root, name);
+		const codex = join(app, BUNDLED_CODEX_RELATIVE_PATH);
+		mkdirSync(join(app, "Contents", "Resources"), { recursive: true });
+		writeFileSync(codex, "#!/bin/sh\n");
+		return { app, codex };
+	}
+
+	it("prefers the host app's bundled CLI over PATH", () => {
+		const root = tempHome();
+		const { app, codex } = makeApp(root, "ChatGPT.app");
+
+		expect(resolveCodexCommand(app, join(root, "missing.app"))).toBe(codex);
+	});
+
+	it("honors an explicit override", () => {
+		const root = tempHome();
+		const { app } = makeApp(root, "ChatGPT.app");
+		process.env.PI_CUA_CODEX_COMMAND = "/opt/codex/bin/codex";
+		try {
+			expect(resolveCodexCommand(app, join(root, "missing.app"))).toBe("/opt/codex/bin/codex");
+		} finally {
+			delete process.env.PI_CUA_CODEX_COMMAND;
+		}
+	});
+
+	it("falls back to PATH when no host app is installed", () => {
+		const root = tempHome();
+		expect(resolveCodexCommand(join(root, "ChatGPT.app"), join(root, "Codex.app"))).toBe("codex");
 	});
 });

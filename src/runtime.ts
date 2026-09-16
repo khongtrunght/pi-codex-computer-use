@@ -7,6 +7,13 @@ import { logDebug } from "./log.ts";
 import type { AppServerRequest, InitializeResponse } from "./protocol.ts";
 import { CodexThreadManager } from "./thread-manager.ts";
 
+/**
+ * Permission prompts name the host app, not the product. ChatGPT.app-hosted
+ * builds of `SkyComputerUseClient` say "Allow ChatGPT to use Finder?" while
+ * older Codex.app builds say "Allow Codex to use Finder?".
+ */
+export const ELICITATION_APP_PATTERN = /Allow (?:ChatGPT|Codex) to use (.+?)\?/i;
+
 export class ComputerUseRuntime {
 	readonly client = new AppServerClient({
 		requestTimeoutMs: 120_000,
@@ -140,7 +147,7 @@ function supportsAlwaysPersistence(meta: unknown): boolean {
 	return Array.isArray(persist) && persist.includes("always");
 }
 
-function shouldDevAutoAccept(message: string): boolean {
+export function shouldDevAutoAccept(message: string): boolean {
 	const allowlist = process.env.PI_CUA_DEV_AUTO_ACCEPT_APPS;
 	if (!allowlist) return false;
 
@@ -150,7 +157,7 @@ function shouldDevAutoAccept(message: string): boolean {
 		.filter(Boolean);
 	if (allowedApps.length === 0) return false;
 
-	const match = message.match(/Allow Codex to use (.+?)\?/i);
+	const match = message.match(ELICITATION_APP_PATTERN);
 	const requestedApp = match?.[1]?.trim();
 	if (!requestedApp) return false;
 
